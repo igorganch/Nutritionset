@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
@@ -126,5 +125,6 @@ const FoodBankMap = () => {
     </View>
   );
 };
+
 
 export default FoodBankMap;
