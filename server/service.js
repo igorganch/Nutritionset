@@ -2,6 +2,7 @@ const Sequelize = require('sequelize');
 var fs = require('fs');
 const { type } = require('os');
 const { Op } = require('sequelize');
+const { error } = require('console');
 if(process.env.NODE_ENV !== 'production'){
     require("dotenv").config();
 }
@@ -42,7 +43,8 @@ var user = sequelize.define('Users',{
     },
     fullname : Sequelize.STRING,
     password : Sequelize.STRING,
-    token :  Sequelize.STRING
+    token :  Sequelize.STRING,
+    points : Sequelize.INTEGER
     
 });
 
@@ -54,18 +56,91 @@ var product = sequelize.define('Products',{
     }
 });
 
+var rank = sequelize.define('Rank',{
+    rank_name : Sequelize.STRING,
+    max_points : Sequelize.INTEGER,
+    rank_badge : Sequelize.STRING,
+    
+});
+rank.hasMany(user, { foreignKey: 'rank_id' });
+
+// One User belongs to one Rank
+user.belongsTo(rank, { foreignKey: 'rank_id', allowNull: false });
+
+const Recipe = sequelize.define('Recipes', {
+    recipe_name: Sequelize.STRING,
+    points: Sequelize.INTEGER,
+    time: Sequelize.STRING,
+    completed : Sequelize.BOOLEAN
+  });
+  
+  // Link Recipe to User
+  user.hasMany(Recipe, { foreignKey: 'user_id' });
+  Recipe.belongsTo(user, { foreignKey: 'user_id' });
+
+  const RecipeStep = sequelize.define('RecipeSteps', {
+    step_number: Sequelize.INTEGER,
+    step_instruction: Sequelize.TEXT
+  });
+  
+  const RecipeIngredient = sequelize.define('RecipeIngredients', {
+    quantity: Sequelize.STRING
+  });
+  
+  // Link product (food item) to recipe through RecipeIngredients
+  Recipe.belongsToMany(product, {
+    through: RecipeIngredient,
+    foreignKey: 'recipe_id'
+  });
+  product.belongsToMany(Recipe, {
+    through: RecipeIngredient,
+    foreignKey: 'product_id'
+  });
+
+  Recipe.hasMany(RecipeStep, { foreignKey: 'recipe_id' });
+  RecipeStep.belongsTo(Recipe, { foreignKey: 'recipe_id' });
+
 user.hasMany(product, { foreignKey: 'user_id' });
 product.belongsTo(user, { foreignKey: 'user_id' });
 
 
 
-sequelize.sync(/*{force : true}*/).then(function(){
+sequelize.sync(/*{force : true}*/).then(async function(){
    /*
     let userid = null;
-    user.create({
+    const created = await rank.bulkCreate([
+        {
+          rank_name: "Starter",
+          max_points: 100,
+          rank_badge: "🥚"
+        },
+        {
+          rank_name: "Learner",
+          max_points: 200,
+          rank_badge: "🌱"
+        },
+        {
+          rank_name: "Focused Eater",
+          max_points: 300,
+          rank_badge: "🔥"
+        },
+        {
+          rank_name: "Champion",
+          max_points: 400,
+          rank_badge: "🥇"
+        },
+        {
+          rank_name: "Food Guardian",
+          max_points: 500,
+          rank_badge: "👑"
+        }
+      ])
+   await user.create({
         fullname :  "Igor Gancharenka",
         email : "igorganch1@gmail.com",
-        password : "1234"
+        password : "1234",
+        rank_id : created[0].id,
+        points : 0
 
     }).then(function(data){
         product.create({
@@ -85,7 +160,9 @@ sequelize.sync(/*{force : true}*/).then(function(){
           ];
           product.bulkCreate(entries);
     })
+
     */
+    
 });    
 
 module.exports.getAllProductsFromUser = function(id){
@@ -104,11 +181,47 @@ module.exports.getAllProductsFromUser = function(id){
 }
 
 
+module.exports.getUser = function(userId) {
+    return new Promise(function(resolve, reject) {
+      user.findOne({
+        where: { id: userId },
+        include: [
+          {
+            model: rank,
+            attributes: ['rank_name', 'rank_badge', 'max_points']
+          },
+          {
+            model: Recipe,
+            attributes: ['id', 'recipe_name', 'points', 'time']
+          }
+        ]
+      })
+      .then(function(res) {
+        resolve(res);
+      })
+      .catch(function(err) {
+        reject(err);
+      });
+    });
+  };
+
+
 module.exports.authenticateUser = function(email,password){
+    console.log("wtf4324324324234234234 ");
     return new Promise(function(resolve,reject){
-        user.findOne({where :{
-            email : email,
-        }}).then(function(res){
+        user.findOne({
+            where: {
+              email: email,
+            },
+            include: [
+              {
+                model: rank,
+                attributes: ['rank_name', 'rank_badge', 'max_points'],
+              }
+            ]
+          }).then(function(res){
+          
+            console.log("wtf4324324324234234234 ");
             resolve(res);
         }).catch(function(err){
             reject(err)
@@ -118,38 +231,40 @@ module.exports.authenticateUser = function(email,password){
 
 }
 
-module.exports.authenticateUser = function(email,password){
-    return new Promise(function(resolve,reject){
-        user.findOne({where :{
-            email : email,
-        }}).then(function(res){
-            resolve(res);
-        }).catch(function(err){
-            reject(err)
-        })
 
-    })
 
-}
-
-module.exports.registerUser = function(email,password, fullname){
-    return new Promise(function(resolve,reject){
-        user.create({
-            fullname :  fullname,
-            email : email,
-            password : password
-    
-        }).then(function(res){
-            console.log(res);
-            resolve(res);
-        }).catch(function(err){
-            console.log(err);
-            reject(err)
-        })
-
-    })
-
-}
+module.exports.registerUser = function(email, password, fullname) {
+    return new Promise(function(resolve, reject) {
+      user.create({
+        fullname: fullname,
+        email: email,
+        password: password,
+        points: 0,
+        rank_id: 1,
+      })
+      .then(function(createdUser) {
+        // Fetch the user again to include the rank
+        return user.findOne({
+          where: { id: createdUser.id },
+          include: [
+            {
+              model: rank,
+              attributes: ['rank_name', 'rank_badge', 'max_points'],
+            }
+          ]
+        });
+      })
+      .then(function(userWithRank) {
+        console.log(userWithRank);
+        resolve(userWithRank);
+      })
+      .catch(function(err) {
+        console.log(err);
+        reject(err);
+      });
+    });
+  };
+  
 
 module.exports.getOneProductsFromUser = function(user_id, product_id, token){
     return new Promise(function(resolve,reject){
@@ -239,26 +354,245 @@ module.exports.createManyProducts = function(user_id,productsArray) {
   };
 
   module.exports.getAllProductBeforeExpiryDate = function(user_id) {  
-        return new Promise(function(resolve, reject){
-            const today = new Date();
-            today.setHours(0, 0, 0, 0); 
-            product.findAll({where :{
-                user_id : user_id,
-                expiry_date: {
-                    [Op.gte]: today // expiry_date is greater than or equal to today
-                },
-                order: [['expiry_date', 'ASC']]
-            }}).then(function(res){
-                resolve(res);
-            }).catch(function(err){
-                reject(err)
-            })
-    
-        })
-   
-    
+    return new Promise(function(resolve, reject) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); 
+  
+      product.findAll({
+        where: {
+          user_id: user_id,
+          expiry_date: {
+            [Op.gte]: today // expiry_date is >= today
+          }
+        },
+        order: [['expiry_date', 'ASC']] // ✅ Correct place
+      }).then(function(res) {
+        resolve(res);
+      }).catch(function(err) {
+        reject(err);
+      });
+    });
   };
 
 
+  module.exports.createMultipleRecipesForUser = async function(userId, recipesArray) {
+    try {
+      const createdRecipes = [];
+  
+      for (const recipeData of recipesArray) {
+        const { recipe_name, time, steps, ingredients,completed } = recipeData;
+  
+        // Make sure points is stored as number
+        const points = parseInt(recipeData.points);
+  
+        // 1. Create recipe
+        const recipe = await Recipe.create({
+          recipe_name,
+          points,
+          time,
+          user_id: userId,
+          completed
+        });
+  
+        // 2. Create steps
+        if (Array.isArray(steps)) {
+          const formattedSteps = steps.map(step => ({
+            recipe_id: recipe.id,
+            step_number: step.step_number,
+            step_instruction: step.step_instruction
+          }));
+  
+          await RecipeStep.bulkCreate(formattedSteps);
+        }
+  
+        // 3. Create ingredients
+        if (Array.isArray(ingredients)) {
+          const formattedIngredients = ingredients.map(ingredient => ({
+            recipe_id: recipe.id,
+            product_id: ingredient.food_id, // 👈 mapped correctly
+            quantity: ingredient.quantity
+          }));
+  
+          await RecipeIngredient.bulkCreate(formattedIngredients);
+        }
+  
+        createdRecipes.push(recipe);
+      }
+  
+      return createdRecipes;
+    } catch (err) {
+      console.error("❌ Error creating multiple recipes:", err);
+      throw err;
+    }
+  };
+
+  module.exports.getAllRecipesByUser = async function(userId) {
+    try {
+      // Fetch all recipes for the user including steps and ingredients
+      const recipes = await Recipe.findAll({
+        where: { user_id: userId },
+        include: [
+          {
+            model: RecipeStep,
+            attributes: ['step_number', 'step_instruction']
+          },
+          {
+            model: product,
+            through: {
+              attributes: ['quantity']
+            },
+            attributes: ['id'], // this will give us product_id aka food_id
+          }
+        ],
+        order: [
+          ['id', 'ASC'],
+          [RecipeStep, 'step_number', 'ASC']
+        ]
+      });
+  
+      // Format the result
+      const formatted = recipes.map(recipe => ({
+        id : recipe.id,
+        recipe_name: recipe.recipe_name,
+        points: recipe.points,
+        time: recipe.time,
+        completed : recipe.completed,
+        ingredients: recipe.Products.map(p => ({
+          food_id: p.id,
+          quantity: p.RecipeIngredients.quantity
+        })),
+        steps: recipe.RecipeSteps.map(step => ({
+          step_number: step.step_number,
+          step_instruction: step.step_instruction
+        }))
+      }));
+  
+      return formatted;
+  
+    } catch (err) {
+      console.error("❌ Error fetching recipes:", err);
+      throw err;
+    }
+  };
+  module.exports.getOneRecipeByUser = async function(userId, recipeId) {
+    try {
+      if (!userId || !recipeId) {
+        throw new Error("Missing userId or recipeId");
+      }
+  
+      const recipe = await Recipe.findOne({
+        where: {
+          id: recipeId,
+          user_id: userId
+        },
+        include: [
+          {
+            model: RecipeStep,
+            attributes: ['step_number', 'step_instruction']
+          },
+          {
+            model: product,
+            through: {
+              attributes: ['quantity']
+            },
+            attributes: ['id'] // gives food_id
+          }
+        ],
+        order: [[RecipeStep, 'step_number', 'ASC']]
+      });
+  
+      if (!recipe) return null;
+  
+      return {
+        id: recipe.id,
+        recipe_name: recipe.recipe_name,
+        points: recipe.points,
+        time: recipe.time,
+        completed : recipe.completed,
+        ingredients: recipe.Products.map(p => ({
+          food_id: p.id,
+          quantity: p.RecipeIngredients.quantity
+        })),
+        steps: recipe.RecipeSteps.map(step => ({
+          step_number: step.step_number,
+          step_instruction: step.step_instruction
+        }))
+      };
+    } catch (err) {
+      console.error("❌ Error fetching recipe by ID:", err);
+      throw err;
+    }
+  };
+
+  module.exports.gainXp = async function(userId, points, recipe_id) {
+    
+    return new Promise(function(resolve, reject) {
+        
+        Recipe.update({ completed : true} ,{
+            where : {
+                id : recipe_id
+            }
+        }).then(function(){
+            
+        module.exports.getUser(userId).then(function(data){
+            console.log( "(data.points + points) " +(data.points + points)  )
+            console.log( "data.dataValues.Rank.dataValues.max_points- " +data.dataValues.Rank.dataValues.max_points )
+            if ((data.points + points) > data.dataValues.Rank.dataValues.max_points){
+             
+                rank.findOne({
+                    where: {
+                      max_points: {
+                        [Sequelize.Op.gt]: (data.dataValues.Rank.dataValues.max_points + points)
+                      }
+                    },
+                    order: [['max_points', 'ASC']]
+                  }).then(function(rank){
+                       console.log("here rank up")
+                        console.log(rank)
+                        user.update({
+                            points : data.points + points,
+                            rank_id : rank.id
+                        },{where :{
+                            id : userId
+                        }}).then(function(){
+
+                            
+                            data.points = data.points + points;
+                            resolve(data);
+                        })
+                  }).catch(function(err){
+                        reject(err);
+                  })
+            }
+            else {
+                user.update({
+                    points : data.points + points
+                },{where :{
+                    id : userId
+                }}).then(function(){
+
+                    data.points = data.points + points;
+                    console.log("DONE")
+                    resolve(data)
+                }).catch(function(err){
+                    reject(err);
+              })
+          
+            }
+
+        
+   
+       
+           
+            
+        })
+        }).catch(error => reject(error))
 
 
+    })
+
+
+}
+
+ 
+  
