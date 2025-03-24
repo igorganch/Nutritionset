@@ -1,50 +1,83 @@
-# Welcome to your Expo app 👋
+# Welcome to your FoodGuard  app 👋
+# FoodGuard - Food Expiry & Management App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Overview
+FoodGuard is a mobile application designed to help users track the expiration dates of their food items and minimize waste. Additionally, the app provides location-based suggestions for nearby food banks where users can donate excess food.
 
-## Get started
+## Features
+- **User Authentication:** Sign up, log in, and log out securely.
+- **Food Tracking:** Add food items with expiration dates.
+- **Notifications:** Receive reminders before food items expire.
+- **Food Bank Suggestions:** Uses location services to suggest nearby food banks for donations.
+- **Map Integration:** Displays a map with food banks based on the user's location.
+- **API Integration:** Securely fetch and manage food data via an API.
 
-1. Install dependencies
+## Getting Started
+### Prerequisites
+- Node.js installed on your system.
+- React Native development environment set up.
+- An API running at `http://192.168.2.56:8080`.
+- Device location services enabled for food bank suggestions.
+- Grant the app permission to access your camera
 
-   ```bash
+
+### Installation
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/igorganch/FoodGuard.git
+   cd FoodGuard
+   ```
+2. Install dependencies:
+   ```sh
    npm install
    ```
-
-2. Start the app
-
-   ```bash
-    npx expo start
+3. Start the development server:
+   ```sh
+   npm start
    ```
 
-In the output, you'll find options to open the app in a
+## User Guide
+### Authentication
+1. **Sign Up:**
+   - Open the app and click "Sign Up."
+   - Enter your name, email, and password.
+   - Submit the form to create an account.
+2. **Login:**
+   - Enter your email and password.
+   - Tap "Login" to access your dashboard.
+3. **Logout:**
+   - Tap the logout .
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Managing Food Items
+1. **Add a Food Item:**
+   - Click "Add Food Item."
+   - Enter the name, category, and expiration date.
+   - Tap "Save."
+2. **View Food Items:**
+   - Navigate to the "My Food" section.
+   - See a list of all stored food items.
+3. **Edit or Delete:**
+   - Tap on an item to edit or remove it.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Finding Nearby Food Banks
+1. **Enable Location Services:**
+   - Grant the app permission to access your location.
+2. **View Suggested Food Banks:**
+   - Navigate to the "Food Donation" section.
+   - See a list of nearby food banks and their addresses.
+3. **View on Map:**
+   - Tap on a food bank to open its location in a map view.
 
-## Get a fresh project
+### API Endpoints Used
+- **Login:** `POST /api/auth/login`
+- **Sign Up:** `POST /api/auth/register`
+- **Fetch Products:** `GET /api/products/?userId=1`
+- **Get Nearby Food Banks:** `GET /api/foodbanks?lat={latitude}&lng={longitude}`
 
-When you're ready, run:
+## Troubleshooting
+- **Cannot Log In?** Ensure the API server is running and the correct credentials are used.
+- **Location Not Detected?** Ensure that location services are enabled on your device.
+- **App Crashes?** Check console logs and ensure dependencies are up to date.
 
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## License
+---------
