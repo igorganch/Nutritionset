@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type AuthScreenProps = {
   showLogin: boolean;
@@ -50,23 +51,21 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
   };
 
   const onSubmitHandler = async () => {
-    console.log("Sign In clicked"); 
+    console.log("Sign In clicked");
     setApiError("");
-
-    // Validate inputs and get results
+  
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
-
-    console.log("Validation - Email:", isEmailValid, "Password:", isPasswordValid); // Debug
-
+  
+    console.log("Validation - Email:", isEmailValid, "Password:", isPasswordValid);
+  
     if (!isEmailValid || !isPasswordValid) {
       console.log("Validation failed");
       return;
     }
-
-    // Make API call to login
+  
     try {
-      console.log("Making API call with:", { email, password }); // Debug
+      console.log("Making API call with:", { email, password });
       const response = await fetch('http://10.0.0.83:8080/api/login', {
         method: "POST",
         headers: {
@@ -77,11 +76,11 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
           password: password,
         }),
       });
-
+  
       console.log("Response status:", response.status);
       const data = await response.json();
       console.log("Response data:", data);
-
+  
       if (!response.ok) {
         if (response.status === 400) {
           setApiError(data.message || "Please provide all required fields");
@@ -94,13 +93,17 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
         }
         return;
       }
-
+  
+      // Save the token to AsyncStorage
+      await AsyncStorage.setItem('authToken', data.token);
+      console.log("Token saved to AsyncStorage:", data.token);
+  
       console.log("Login successful:", data);
       console.log("signed in!");
-      console.log("Navigating to home...")
+      console.log("Navigating to home...");
       router.replace("/(tabs)/home");
-      console.log("Navigation triggered...")
-
+      console.log("Navigation triggered...");
+  
     } catch (error) {
       console.error("API call failed:", error);
       setApiError("Network error. Please check your connection and try again.");

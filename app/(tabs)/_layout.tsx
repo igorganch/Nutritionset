@@ -20,7 +20,7 @@ export default function TabsLayout() {
       default: {},
     }),
   }}>
-    <Tabs.Screen name="home" options={{ tabBarIcon: ({ color }) => <FontAwesome name="home" size={25} color={color} /> }} />
+    <Tabs.Screen name="home" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome name="home" size={25} color={color} /> }} />
     <Tabs.Screen
         name="explore"
         options={{
