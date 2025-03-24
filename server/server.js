@@ -40,6 +40,8 @@ app.listen(port, () => {
 });
 
 
+
+
 const verifyToken = (req, res, next) => {
   const token = req.headers["authorization"];
   if (!token){
@@ -59,6 +61,8 @@ const verifyToken = (req, res, next) => {
 
 /*Real Calls*/
 /*API CALL - Get all products through associated through user id  URL - http://localhost:8080/api/products?userId=${userId}  */
+
+
 app.get("/api/products" ,verifyToken, (req,res) =>{
   if (!req.query.userId){
       return res.status(400).json({ message: "Error: req.query.userId not defined "});
@@ -82,7 +86,7 @@ app.get("/api/product" , verifyToken,  (req,res) =>{
 })
 
 app.post("/api/login", upload.none(),async (req, res)=>{
-    
+  console.log("WHAT?");
   if(!req.body.email|| !req.body.password ){
       return res.status(400).json({ message: "Error: "  + (!req.body.password ?  " req.body.password not defined " : "") +  (!req.body.email ?  " req.body.email not defined " : "") });
   }
@@ -90,7 +94,7 @@ app.post("/api/login", upload.none(),async (req, res)=>{
     if (data.password == req.body.password){
       console.log("")
       const token = jwt.sign({ userId: data.dataValues.id }, process.env.JWT_SECRET);
-      return res.status(200).json({ token : token, userid : data.dataValues.id, fullname : data.dataValues.fullname});
+      return res.status(200).json({ token : token, userid : data.dataValues.id, fullname : data.dataValues.fullname, rank : data.dataValues.Rank, points :   data.dataValues.points});
     }
     else {
       return res.status(401).json({ message: "Unauthorized: Invalid email / password" });
@@ -110,7 +114,7 @@ app.post("/api/register", upload.none(), async (req, res)=>{
   }
    service.registerUser(req.body.email, req.body.password, req.body.fullname).then(function(data){ 
     const token = jwt.sign({ userId: data.dataValues.id}, process.env.JWT_SECRET);
-      return res.status(200).json({ token : token, userid : data.dataValues.id, fullname : data.dataValues.fullname});
+      return res.status(200).json({ token : token, userid : data.dataValues.id, fullname : data.dataValues.fullname, rank : data.dataValues.Rank, points :   data.dataValues.points});
  
   }).catch(function(err){
       return res.status(500).json({ ErrorMessage : "Error: " + err.errors[0].message});
@@ -118,7 +122,8 @@ app.post("/api/register", upload.none(), async (req, res)=>{
   
 })
 
-app.put("/api/product/edit" ,verifyToken, upload.none(),(req,res) =>{
+app.post("/api/product/edit" , verifyToken,upload.none(),(req,res) =>{
+ console.log("Here")
   if (!req.query.userId  || !req.query.productId|| !req.body.food_name || !req.body.expiry_date){
      return res.status(400).json({ message: "Error: " + (!req.query.userId ?  " req.query.userId not defined " : "" ) + (!req.query.productId ?  " req.query.productId not defined " : "" ) +  (!req.body.food_name ?  " req.body.food_name not defined " : "" ) + (!req.body.expiry_date ?  " req.body.expiry_date not defined " : "" ) });
   } 
@@ -155,7 +160,74 @@ app.post("/api/product/create", verifyToken, upload.none(),(req,res) =>{
  
 })
 
-app.post("/api/deepseek/upload/picture", (req, res) => {
+
+app.post("/api/gpt/upload/recipe/verification", verifyToken, (req, res) => {
+  upload.single('picture')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ message: "Multer error: " + err.message });
+    }
+    if (!req.query.userId || !req.query.recipeId) {
+        return res.status(400).json({ message: "Error: " + (!req.query.userId ? " req.query.userId not defined. " : "")  + + (!req.query.recipeId ? " req.query.recipeId not defined. " : "")});
+    }
+    service.getOneRecipeByUser(req.query.userId, req.query.recipeId).then(async function(recipe_data){
+      
+      const base64Image = req.file.buffer.toString("base64");
+      console.log(recipe_data);
+      payload.messages[0].content = [
+        {
+          type: 'text',
+           text: `Here is a recipe name ${recipe_data.recipe_name}. The image I'm sending shows a plate of food. Does it match the recipe name ? If yes, return: { "verification": true, "reason": "..." }. If not, return: { "verification": false, "reason": "..." }. Only respond in valid JSON.`
+        },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
+      ]
+      let requestCompleted = false, count = 0, data;
+      while (requestCompleted == false && count < 3){
+        console.log("Chattinggg....")
+        await axios.post('https://api.openai.com/v1/chat/completions', payload, { headers })
+        .then((response) => {
+          if (response.data.choices.length != 0){
+            data = JSON.parse(response.data.choices[0].message.content.replace(/```json\s*/i, "").replace(/```/g, ""));
+            requestCompleted = true;
+          }
+        })
+        .catch((error) => {
+          data = error
+        });
+        count++;
+      }
+
+      if(requestCompleted){
+        if (data.verification == true){
+            console.log("req.query.recipeId - " + req.query.recipeId)
+            service.gainXp(req.query.userId, recipe_data.points,req.query.recipeId).then(function(user){
+              service.getAllRecipesByUser(req.query.userId).then(function(reciepe_return){
+                return res.status(200).json({ verification : data, user : user, recipes : reciepe_return})
+              }).catch(function(error){
+              res.status(500).json({message: "Error: " + error})
+            })
+              
+            }).catch(function(error){
+              res.status(500).json({message: "Error: " + error})
+            })
+        }else{
+            res.status(500).json({data})
+        }
+          
+  
+      }else {
+        return (requestCompleted ? res.status(200).json(data) :  res.status(500).json({message: "Error: " + data}) ) 
+      }
+
+
+
+    }).catch(function(err){
+      return res.status(500).json({ message : "Error: " + err});
+    })
+    
+  })
+});
+
+app.post("/api/gpt/upload/picture", verifyToken, (req, res) => {
   upload.single('picture')(req, res, async (err) => {
 
       if (err) {
@@ -205,17 +277,24 @@ app.post("/api/deepseek/upload/picture", (req, res) => {
 });
 
 
-
-app.get("/api/recipes", async (req, res) => {
+app.get("/api/recipes/fromuser", verifyToken, (req,res)=>{
+  service.getAllRecipesByUser(req.query.userId).then(function(data){
+    return res.status(200).json(data)
+  }).catch(err =>{
+    res.status(500).json({message: "Error: " + err})
+  })
+}) 
+app.get("/api/gpt/recipes", verifyToken, async (req, res) => {
     console.log("Here>")
     if (!req.query.userId) {
           return res.status(400).json({ message: "Error: " + (!req.query.userId ? " req.query.userId not defined. " : "") });
     }
     service.getAllProductBeforeExpiryDate(req.query.userId).then(async function(data){
+      console.log("In here LOLDFDFO")
       payload.messages[0].content = [
         {
           type: 'text',
-          text: `Generate me 3 recipes based on the priotizing the ingredients that are expiring soon ${JSON.stringify(data)}, return each recipe in this format. Always respond in valid JSON. Use this structure.  eg. "recipe_name": "Stir-Fried Garlic Vegetables",
+          text: `Generate me 3  healthy recipes based on the priotizing the ingredients that are expiring soon and only using the ingredients that are listed ${JSON.stringify(data)}, return each recipe in this format. Always respond in valid JSON. Use this structure. And out of 20 points assign how healthy the recipe is.  eg. "recipe_name": "Stir-Fried Garlic Vegetables",
 "ingredients": [
       { "food_id": 5, "quantity": "1 bunch" },
       { "food_id": 6, "quantity": "1 head" },
@@ -240,7 +319,10 @@ app.get("/api/recipes", async (req, res) => {
         "step_number": 4,
         "step_instruction": "Toss in spinach and green onions. Cook for 2 more minutes. Season with soy sauce and serve."
       }
-    ]
+    ],
+    "points" : "15",
+    "time" : "45min,
+    "completed" : false
     }]`
         }
       ];
@@ -264,7 +346,13 @@ app.get("/api/recipes", async (req, res) => {
       
     }
     if(requestCompleted){
-      return res.status(200).json(data_recipes)
+      service.createMultipleRecipesForUser(req.query.userId,data_recipes).then(function(data){
+        return res.status(200).json(data)
+      }).catch(function(err){
+        console.log(err);
+        return res.status(400).json(err);
+      })
+      
     }else {
       return (requestCompleted ? res.status(200).json(data) :  res.status(500).json({message: "Error: " + data}) ) 
     }
@@ -303,7 +391,7 @@ app.get("/api/test/product" , (req,res) =>{
 })
 
 /*TEST API CALL - Edit single product through associated through user id and product id. Body parameter should include ("food_name": "Vanilla Yogurt", "expiry_date": "2025/03/17")  URL - http://localhost:8080/api/test/product/edit?productId=${productId}&userId=${userId} */
-app.put("/api/test/product/edit" , upload.none(),(req,res) =>{
+/*app.put("/api/test/product/edit" , verifyToken,upload.none(),(req,res) =>{
     if (!req.query.userId  || !req.query.productId|| !req.body.food_name || !req.body.expiry_date){
        return res.status(400).json({ message: "Error: " + (!req.query.userId ?  " req.query.userId not defined " : "" ) + (!req.query.productId ?  " req.query.productId not defined " : "" ) +  (!req.body.food_name ?  " req.body.food_name not defined " : "" ) + (!req.body.expiry_date ?  " req.body.expiry_date not defined " : "" ) });
     }
@@ -318,7 +406,7 @@ app.put("/api/test/product/edit" , upload.none(),(req,res) =>{
         }
     }
     return (tf ? res.status(200).json(food) : res.status(404).json({ message: "Error: Product not found"  })); 
-})
+}) */
 /*TEST API CALL - Delete single product through associated through user id and product id.  URL - http://localhost:8080/api/test/product/delete?productId=${productId}&userId=${userId} */
 app.delete("/api/test/product/delete" , upload.none(),(req,res) =>{
   if (!req.query.userId  || !req.query.productId ){

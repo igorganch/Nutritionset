@@ -1,39 +1,117 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons"; // Import icons
+import { Ionicons } from "@expo/vector-icons";
 
-export default function Login() {
+type AuthScreenProps = {
+  showLogin: boolean;
+  setShowLogin: (value: boolean) => void;
+};
+
+const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
+  const [error, setError] = useState("");
+  const [errorPass, setErrorPass] = useState("");
+  const [apiError, setApiError] = useState("");
 
   const togglePasswordVisibility = () => {
     setSecureTextEntry(!secureTextEntry);
   };
 
-  const onSubmitHandler = () => {
-    console.log({ email, password });
-    setTimeout(() => {
-      router.replace("/(tabs)");
-    }, 0);
+  const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+
+  // Validation functions that only check, not set state
+  const validateEmail = (input: string) => {
+    if (!input) {
+      setError("Email address is required");
+      return false;
+    } else if (!emailRegex.test(input)) {
+      setError("Invalid email address");
+      return false;
+    }
+    setError("");
+    return true;
+  };
+
+  const validatePassword = (input: string) => {
+    if (!input) {
+      setErrorPass("Password is required");
+      return false;
+    } else if (input.length < 9) {
+      setErrorPass("Password must be at least 9 characters");
+      return false;
+    }
+    setErrorPass("");
+    return true;
+  };
+
+  const onSubmitHandler = async () => {
+    console.log("Sign In clicked"); 
+    setApiError("");
+
+    // Validate inputs and get results
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+
+    console.log("Validation - Email:", isEmailValid, "Password:", isPasswordValid); // Debug
+
+    if (!isEmailValid || !isPasswordValid) {
+      console.log("Validation failed");
+      return;
+    }
+
+    // Make API call to login
+    try {
+      console.log("Making API call with:", { email, password }); // Debug
+      const response = await fetch('http://10.0.0.83:8080/api/login', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email,
+          password: password,
+        }),
+      });
+
+      console.log("Response status:", response.status);
+      const data = await response.json();
+      console.log("Response data:", data);
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          setApiError(data.message || "Please provide all required fields");
+        } else if (response.status === 401) {
+          setApiError(data.message || "Invalid email or password");
+        } else if (response.status === 500) {
+          setApiError(data.message || "Login failed. Please try again.");
+        } else {
+          setApiError("An unexpected error occurred. Please try again.");
+        }
+        return;
+      }
+
+      console.log("Login successful:", data);
+      console.log("signed in!");
+      console.log("Navigating to home...")
+      router.replace("/(tabs)/home");
+      console.log("Navigation triggered...")
+
+    } catch (error) {
+      console.error("API call failed:", error);
+      setApiError("Network error. Please check your connection and try again.");
+    }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>Sign in your Account</Text>
-        <Text style={styles.subtitle}>
-          Welcome back, please enter your details
-        </Text>
+        <Text style={styles.subtitle}>Welcome back, please enter your details</Text>
 
         {/* Email Input */}
         <View style={styles.inputContainer}>
@@ -41,12 +119,14 @@ export default function Login() {
           <TextInput
             style={styles.input}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={setEmail} // Only update state here
             placeholder="Email"
             placeholderTextColor="#9ca3af"
             keyboardType="email-address"
+            autoCapitalize="none"
           />
         </View>
+        {error ? <Text style={styles.errorMessage}>{error}</Text> : null}
 
         {/* Password Input */}
         <View style={styles.inputContainer}>
@@ -54,7 +134,7 @@ export default function Login() {
           <TextInput
             style={styles.input}
             value={password}
-            onChangeText={setPassword}
+            onChangeText={setPassword} // Only update state here
             placeholder="Password"
             placeholderTextColor="#9ca3af"
             secureTextEntry={secureTextEntry}
@@ -67,11 +147,11 @@ export default function Login() {
             />
           </TouchableOpacity>
         </View>
+        {errorPass ? <Text style={styles.errorPassword}>{errorPass}</Text> : null}
 
-        {/* Forgot Password */}
-        <TouchableOpacity>
-          <Text style={styles.forgotText}>Forgot Password? <Text style={styles.resetLink}>Reset it</Text></Text>
-        </TouchableOpacity>
+        {/* API Error Message */}
+        {apiError ? <Text style={styles.errorMessage}>{apiError}</Text> : null}
+
 
         {/* Sign In Button */}
         <TouchableOpacity onPress={onSubmitHandler} style={styles.button}>
@@ -79,25 +159,33 @@ export default function Login() {
         </TouchableOpacity>
 
         {/* Sign Up Link */}
-        <Text style={styles.signupText}>
-          Don't have an Account? <Text style={styles.signupLink}>Sign Up</Text>
-        </Text>
+        <TouchableOpacity onPress={() => router.push("/signup")} style={styles.signupText}>
+          <Text>
+            Don't have an Account? <Text style={styles.signupLink}>Sign Up</Text>
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
-}
+};
 
+export default Login;
+
+// Styles remain unchanged
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F5F5", // White background or maybe green 
+    backgroundColor: "#F5F5F5",
     justifyContent: "center",
     alignItems: "center",
   },
-
-  // stylesheeet 
+  errorMessage: {
+    color: "red",
+  },
+  errorPassword: {
+    color: "red",
+  },
   card: {
-
     backgroundColor: "#fff",
     padding: 24,
     width: "90%",
@@ -169,4 +257,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-
