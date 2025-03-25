@@ -112,7 +112,7 @@ const Signup = () => {
 
      
       console.log('Registration successful:', data);
-      router.replace("/(tabs)/home");
+      router.replace("/login");
 
     } catch (error) {
       console.error('API call failed:', error);
