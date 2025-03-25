@@ -10,7 +10,7 @@ export default function WelcomeScreen() {
   useEffect(() => {
     const timer = setTimeout(() => {
       router.replace('/login'); // replaces history so back button doesn't return here
-    }, 10000);
+    }, 1);
     return () => clearTimeout(timer);
   }, []);
 

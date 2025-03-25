@@ -425,10 +425,8 @@ module.exports.createManyProducts = function(user_id,productsArray) {
       throw err;
     }
   };
-
   module.exports.getAllRecipesByUser = async function(userId) {
     try {
-      // Fetch all recipes for the user including steps and ingredients
       const recipes = await Recipe.findAll({
         where: { user_id: userId },
         include: [
@@ -441,7 +439,7 @@ module.exports.createManyProducts = function(user_id,productsArray) {
             through: {
               attributes: ['quantity']
             },
-            attributes: ['id'], // this will give us product_id aka food_id
+            attributes: ['id', 'food_name']
           }
         ],
         order: [
@@ -450,15 +448,15 @@ module.exports.createManyProducts = function(user_id,productsArray) {
         ]
       });
   
-      // Format the result
       const formatted = recipes.map(recipe => ({
-        id : recipe.id,
+        id: recipe.id,
         recipe_name: recipe.recipe_name,
         points: recipe.points,
         time: recipe.time,
-        completed : recipe.completed,
+        completed: recipe.completed,
         ingredients: recipe.Products.map(p => ({
           food_id: p.id,
+          food_name: p.get('food_name'), // or p.dataValues.food_name
           quantity: p.RecipeIngredients.quantity
         })),
         steps: recipe.RecipeSteps.map(step => ({
@@ -468,12 +466,12 @@ module.exports.createManyProducts = function(user_id,productsArray) {
       }));
   
       return formatted;
-  
     } catch (err) {
       console.error("❌ Error fetching recipes:", err);
       throw err;
     }
   };
+  
   module.exports.getOneRecipeByUser = async function(userId, recipeId) {
     try {
       if (!userId || !recipeId) {
