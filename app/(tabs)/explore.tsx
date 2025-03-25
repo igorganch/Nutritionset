@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 
+
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 Notifications.setNotificationHandler({
@@ -56,28 +57,28 @@ export default function TabTwoScreen() {
 
   
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const storedAuthData = await AsyncStorage.getItem('authData');
-        if (storedAuthData) {
-          const parsedAuthData = JSON.parse(storedAuthData);
-          setAuthData(parsedAuthData);
-          setCurrentPoints(parsedAuthData.points || 0); 
-          setMaxPoints(parsedAuthData.rank?.max_points || 300); 
-          console.log('Loaded authData:', parsedAuthData); 
-          console.log('rank name: ', parsedAuthData.rank?.rank_name);
-          console.log('rank badge: ', parsedAuthData.rank?.rank_badge);
-        } else {
-          router.replace('/login');
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        try {
+          const storedAuthData = await AsyncStorage.getItem('authData');
+          if (storedAuthData) {
+            const parsedAuthData = JSON.parse(storedAuthData);
+            setAuthData(parsedAuthData);
+            setCurrentPoints(parsedAuthData.points || 0); 
+            setMaxPoints(parsedAuthData.rank?.max_points || 300); 
+            console.log('Loaded authData:', parsedAuthData); 
+          } else {
+            router.replace('/login');
+          }
+        } catch (error) {
+          console.error('Error loading data:', error);
+          Alert.alert('Error', 'Failed to load data');
         }
-      } catch (error) {
-        console.error('Error loading data:', error);
-        Alert.alert('Error', 'Failed to load data');
-      }
-    };
-    loadData();
-  }, [router]);
+      };
+      loadData();
+    }, [router])
+  );
 
   const totalProducts = products.length;
 
@@ -158,10 +159,10 @@ export default function TabTwoScreen() {
 
   const fetchProducts = useCallback(async () => {
     if (!authData) {
-    //    Alert.alert('Error', 'Please log in first');
+      Alert.alert('Error', 'Please log in first');
       return;
     }
-
+  
     try {
       const response = await axios.get(`http://${ip}:8080/api/products/?userId=${authData.userId}`, {
         headers: {
@@ -169,20 +170,21 @@ export default function TabTwoScreen() {
         },
       });
       const data = response.data;
-
+  
       if (response.status === 200) {
         const mappedProducts: Product[] = data.map((item: any) => {
           const productDate = new Date(item.expiry_date);
-          productDate.setHours(0, 0, 0, 0);
+          // Normalize to YYYY-MM-DD string
+          const formattedDate = `${productDate.getFullYear()}-${(productDate.getMonth() + 1).toString().padStart(2, '0')}-${productDate.getDate().toString().padStart(2, '0')}`;
           return {
             id: String(item.id),
             name: item.food_name,
-            goodUntil: `${productDate.getFullYear()}-${(productDate.getMonth() + 1).toString().padStart(2, '0')}-${productDate.getDate().toString().padStart(2, '0')}`,
+            goodUntil: formattedDate, // Store as normalized string
             isSelected: false,
           };
         });
         setProducts(mappedProducts);
-
+  
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const expiringProducts = mappedProducts.filter(product => {
@@ -193,7 +195,7 @@ export default function TabTwoScreen() {
           );
           return daysUntilExpiry >= 0 && daysUntilExpiry <= 2;
         });
-
+  
         if (expiringProducts.length > 0) {
           const productNames = expiringProducts.map(p => p.name).join(', ');
           await sendPushNotification(
@@ -281,87 +283,88 @@ export default function TabTwoScreen() {
   };
 
   const saveChanges = async () => {
-    if (!authData) {
-      Alert.alert('Error', 'Please log in first');
+  if (!authData) {
+    Alert.alert('Error', 'Please log in first');
+    return;
+  }
+
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(editGoodUntil)) {
+      Alert.alert('Error', 'Please enter date in YYYY-MM-DD format');
       return;
     }
 
-    try {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(editGoodUntil)) {
-        Alert.alert('Error', 'Please enter date in YYYY-MM-DD format');
-        return;
-      }
-
-      const testDate = new Date(editGoodUntil);
-      if (isNaN(testDate.getTime())) {
-        Alert.alert('Error', 'Invalid date');
-        return;
-      }
-
-      if (selectedProduct) {
-        const response = await fetch(`http://${ip}:8080/api/product/edit?productId=${selectedProduct.id}&userId=${authData.userId}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authData.token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            food_name: editName,
-            expiry_date: editGoodUntil,
-          }),
-        });
-
-        if (response.ok) {
-          setProducts(products.map(product =>
-            product.id === selectedProduct.id
-              ? { ...product, name: editName, goodUntil: editGoodUntil }
-              : product
-          ));
-          Alert.alert('Success', 'Product updated successfully!');
-          fetchProducts();
-        } else {
-          const result = await response.text();
-          Alert.alert('Error', result || 'Failed to update product.');
-        }
-      } else {
-        const response = await fetch(`http://${ip}:8080/api/product/create?userId=${authData.userId}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authData.token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            food_name: editName,
-            expiry_date: editGoodUntil,
-          }),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          setProducts([
-            ...products,
-            {
-              id: String(result[result.length - 1].id),
-              name: editName,
-              goodUntil: editGoodUntil,
-              isSelected: false,
-            },
-          ]);
-          Alert.alert('Success', 'Product added successfully!');
-          fetchProducts();
-        } else {
-          Alert.alert('Error', result.message || 'Failed to add product.');
-        }
-      }
-      setModalVisible(false);
-      setSelectedProduct(null);
-      setCapturedImage(null);
-    } catch (err) {
-      console.error('Error saving product:', err);
-      Alert.alert('Error', 'An error occurred while saving the product.');
+    const testDate = new Date(editGoodUntil);
+    if (isNaN(testDate.getTime())) {
+      Alert.alert('Error', 'Invalid date');
+      return;
     }
-  };
+
+    if (selectedProduct) {
+      const response = await fetch(`http://${ip}:8080/api/product/edit?productId=${selectedProduct.id}&userId=${authData.userId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authData.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          food_name: editName,
+          expiry_date: editGoodUntil, // Send as YYYY-MM-DD string
+        }),
+      });
+
+      if (response.ok) {
+        setProducts(products.map(product =>
+          product.id === selectedProduct.id
+            ? { ...product, name: editName, goodUntil: editGoodUntil }
+            : product
+        ));
+        Alert.alert('Success', 'Product updated successfully!');
+        fetchProducts();
+      } else {
+        const result = await response.text();
+        Alert.alert('Error', result || 'Failed to update product.');
+      }
+    } else {
+      const response = await fetch(`http://${ip}:8080/api/product/create?userId=${authData.userId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authData.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          food_name: editName,
+          expiry_date: editGoodUntil,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setProducts([
+          ...products,
+          {
+            id: String(result[result.length - 1].id),
+            name: editName,
+            goodUntil: editGoodUntil,
+            isSelected: false,
+          },
+        ]);
+        Alert.alert('Success', 'Product added successfully!');
+        fetchProducts();
+      } else {
+        Alert.alert('Error', result.message || 'Failed to add product.');
+      }
+    }
+    setModalVisible(false);
+    setSelectedProduct(null);
+    setCapturedImage(null);
+  } catch (err) {
+    console.error('Error saving product:', err);
+    Alert.alert('Error', 'An error occurred while saving the product.');
+  }
+};
+    
 
   const openCamera = () => setShowCamera(true);
   const closeCamera = () => setShowCamera(false);
@@ -403,16 +406,15 @@ export default function TabTwoScreen() {
   const renderItem = ({ item }: { item: Product }) => {
     const productDate = new Date(item.goodUntil);
     productDate.setHours(0, 0, 0, 0);
-    const formattedDate = `${productDate.getFullYear()}-${(productDate.getMonth() + 1).toString().padStart(2, '0')}-${productDate.getDate().toString().padStart(2, '0')}`;
     const timeDiff = productDate.getTime() - today.getTime();
     const dayDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
     const expiryStyle = productDate < today ? styles.expired : dayDiff <= 2 ? styles.closeToExpiry : styles.farToExpiry;
-
+  
     return (
       <TouchableOpacity onPress={() => openModal(item)} style={styles.item} key={item.id}>
         <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.productName, expiryStyle]}>{item.name}</Text>
         <View style={styles.checkboxExpiryDate}>
-          <Text style={styles.productName}>{formattedDate}</Text>
+          <Text style={styles.productName}>{item.goodUntil}</Text> {/* Use the string directly */}
           {showDeleteButton && (
             <TouchableOpacity onPress={() => toggleCheckbox(item.id)} style={styles.checkbox}>
               {item.isSelected && <FontAwesome name="check" size={12} color="#333" />}
