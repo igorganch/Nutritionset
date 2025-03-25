@@ -41,7 +41,7 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
     if (!input) {
       setErrorPass("Password is required");
       return false;
-    } else if (input.length < 9) { // change back to 9
+    } else if (input.length < 3) { // change back to 9
       setErrorPass("Password must be at least 9 characters");
       return false;
     }
@@ -165,11 +165,7 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
 
         {apiError ? <Text style={styles.errorMessage}>{apiError}</Text> : null}
 
-        <TouchableOpacity>
-          <Text style={styles.forgotText}>
-            Forgot Password? <Text style={styles.resetLink}>Reset it</Text>
-          </Text>
-        </TouchableOpacity>
+        
 
         <TouchableOpacity onPress={onSubmitHandler} style={styles.button}>
           <Text style={styles.buttonText}>Sign In</Text>

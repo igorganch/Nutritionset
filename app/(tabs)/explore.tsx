@@ -66,6 +66,8 @@ export default function TabTwoScreen() {
           setCurrentPoints(parsedAuthData.points || 0); 
           setMaxPoints(parsedAuthData.rank?.max_points || 300); 
           console.log('Loaded authData:', parsedAuthData); 
+          console.log('rank name: ', parsedAuthData.rank?.rank_name);
+          console.log('rank badge: ', parsedAuthData.rank?.rank_badge);
         } else {
           router.replace('/login');
         }
@@ -156,7 +158,7 @@ export default function TabTwoScreen() {
 
   const fetchProducts = useCallback(async () => {
     if (!authData) {
-      Alert.alert('Error', 'Please log in first');
+    //    Alert.alert('Error', 'Please log in first');
       return;
     }
 
@@ -449,6 +451,7 @@ export default function TabTwoScreen() {
 
       {/* Progress Bar */}
       <View style={{ width: screenWidth * 0.9 }}>
+       
         <View style={styles.progressContainer}>
           <View style={[styles.progressBar, { width: barWidth }]} />
           <Text style={styles.progressText}>{`${currentPoints} / ${maxPoints} Points`}</Text>
@@ -462,7 +465,7 @@ export default function TabTwoScreen() {
       </Animated.View>
 
       <View style={styles.boxContainer}>
-        <TouchableOpacity style={[styles.boxButton, styles.totalProducts]} onPress={() => setTotalProductsModalVisible(true)}>
+        <TouchableOpacity style={[styles.boxButton, styles.totalProducts]} onPress={() => router.push('/productlist')}>
           <Text style={styles.boxButtonTitle}>TOTAL PRODUCTS</Text>
           <Text style={styles.boxButtonCount}>{totalProducts}</Text>
         </TouchableOpacity>
