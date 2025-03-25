@@ -25,7 +25,6 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
 
   const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 
-  // Validation functions that only check, not set state
   const validateEmail = (input: string) => {
     if (!input) {
       setError("Email address is required");
@@ -42,7 +41,7 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
     if (!input) {
       setErrorPass("Password is required");
       return false;
-    } else if (input.length < 9) {
+    } else if (input.length < 9) { // change back to 9
       setErrorPass("Password must be at least 9 characters");
       return false;
     }
@@ -53,17 +52,17 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
   const onSubmitHandler = async () => {
     console.log("Sign In clicked");
     setApiError("");
-  
+
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
-  
+
     console.log("Validation - Email:", isEmailValid, "Password:", isPasswordValid);
-  
+
     if (!isEmailValid || !isPasswordValid) {
       console.log("Validation failed");
       return;
     }
-  
+
     try {
       console.log("Making API call with:", { email, password });
       const response = await fetch('http://10.0.0.83:8080/api/login', {
@@ -76,11 +75,11 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
           password: password,
         }),
       });
-  
+
       console.log("Response status:", response.status);
       const data = await response.json();
       console.log("Response data:", data);
-  
+
       if (!response.ok) {
         if (response.status === 400) {
           setApiError(data.message || "Please provide all required fields");
@@ -93,17 +92,31 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
         }
         return;
       }
-  
-      // Save the token to AsyncStorage
-      await AsyncStorage.setItem('authToken', data.token);
-      console.log("Token saved to AsyncStorage:", data.token);
-  
+     
+
+      const authData = {
+        token: data.token,
+        userId: data.userid, 
+        fullname: data.fullname,
+        rank: data.rank || { 
+          rank_name: "No Rank",
+          rank_badge: "❓",
+          max_points: 0,
+        },
+        points: data.points || 0, 
+      };
+     
+
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('authData', JSON.stringify(authData));
+      console.log("Auth data saved to AsyncStorage:", authData);
+
       console.log("Login successful:", data);
       console.log("signed in!");
       console.log("Navigating to home...");
       router.replace("/(tabs)/home");
       console.log("Navigation triggered...");
-  
+
     } catch (error) {
       console.error("API call failed:", error);
       setApiError("Network error. Please check your connection and try again.");
@@ -116,13 +129,12 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
         <Text style={styles.title}>Sign in your Account</Text>
         <Text style={styles.subtitle}>Welcome back, please enter your details</Text>
 
-        {/* Email Input */}
         <View style={styles.inputContainer}>
           <Ionicons name="mail-outline" size={20} color="#666" />
           <TextInput
             style={styles.input}
             value={email}
-            onChangeText={setEmail} // Only update state here
+            onChangeText={setEmail}
             placeholder="Email"
             placeholderTextColor="#9ca3af"
             keyboardType="email-address"
@@ -131,13 +143,12 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
         </View>
         {error ? <Text style={styles.errorMessage}>{error}</Text> : null}
 
-        {/* Password Input */}
         <View style={styles.inputContainer}>
           <Ionicons name="lock-closed-outline" size={20} color="#666" />
           <TextInput
             style={styles.input}
             value={password}
-            onChangeText={setPassword} // Only update state here
+            onChangeText={setPassword}
             placeholder="Password"
             placeholderTextColor="#9ca3af"
             secureTextEntry={secureTextEntry}
@@ -152,16 +163,18 @@ const Login: React.FC<AuthScreenProps> = ({ showLogin, setShowLogin }) => {
         </View>
         {errorPass ? <Text style={styles.errorPassword}>{errorPass}</Text> : null}
 
-        {/* API Error Message */}
         {apiError ? <Text style={styles.errorMessage}>{apiError}</Text> : null}
 
+        <TouchableOpacity>
+          <Text style={styles.forgotText}>
+            Forgot Password? <Text style={styles.resetLink}>Reset it</Text>
+          </Text>
+        </TouchableOpacity>
 
-        {/* Sign In Button */}
         <TouchableOpacity onPress={onSubmitHandler} style={styles.button}>
           <Text style={styles.buttonText}>Sign In</Text>
         </TouchableOpacity>
 
-        {/* Sign Up Link */}
         <TouchableOpacity onPress={() => router.push("/signup")} style={styles.signupText}>
           <Text>
             Don't have an Account? <Text style={styles.signupLink}>Sign Up</Text>

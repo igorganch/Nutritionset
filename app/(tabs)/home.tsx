@@ -3,9 +3,10 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { Text, View, Button, TextInput, TouchableOpacity, Keyboard } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { FontAwesome } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function HomeScreen() {
-  const [permission, setPermission] = useCameraPermissions();
+  const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [photos, setPhotos] = useState<string[]>([]);
   const [showCamera, setShowCamera] = useState(false);
@@ -13,7 +14,24 @@ export default function HomeScreen() {
   const [name, setName] = useState('');
   const [expiration, setExpiration] = useState('');
   const [error, setError] = useState<string>('');
-  const [token,setToken] = useState("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc0MjY2NDMwNX0.S17thMRzfj1oL8zABXAup8Qf2RTyso8QlyxkmrWlMt4")
+  const [authData, setAuthData] = useState<{ token: string; userId: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Load auth data from AsyncStorage when component mounts
+  useEffect(() => {
+    const loadAuthData = async () => {
+      try {
+        const storedAuthData = await AsyncStorage.getItem('authData');
+        if (storedAuthData) {
+          setAuthData(JSON.parse(storedAuthData));
+        }
+      } catch (error) {
+        console.error('Error loading auth data:', error);
+        Alert.alert('Error', 'Failed to load authentication data');
+      }
+    };
+    loadAuthData();
+  }, []);
 
   if (!permission) {
     return <View />;
@@ -22,65 +40,114 @@ export default function HomeScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
-        <Text>We need your permission to take a picture</Text>
-        <Button onPress={setPermission} title="Grant permission" />
+        <Text>We need your permission to use the camera</Text>
+        <Button onPress={requestPermission} title="Grant permission" />
       </View>
     );
   }
 
   const addProduct = async () => {
+    if (!authData) {
+      Alert.alert('Error', 'Please log in first');
+      return;
+    }
+
     try {
-      // Hardcode userId for testing
-      const userId = '1'; // Assuming userId 1 for testing purposes
-  
-      // Format expiration date to YYYY/MM/DD (required by your backend)
+      setIsLoading(true);
       const [month, year] = expiration.split('/');
-      const formattedExpiration = `20${year}/${month}/01`; // Assuming day as 01 for MM/YY format
-  
-      // Log the data being sent
-      console.log('Sending data:', {
-        userId,
-        food_name: name,
-        expiry_date: formattedExpiration,
-      });
-  
-      // Send the product data to the test endpoint (no token required)
-      const response = await fetch(`http://10.0.0.83:8080/api/product/create?userId=${userId}`, {
+      const formattedExpiration = `20${year}/${month}/01`;
+
+      const response = await fetch(`http://10.0.0.83:8080/api/product/create?userId=${authData.userId}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json', // Change to JSON
-          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authData.token}`,
         },
         body: JSON.stringify({
           food_name: name,
           expiry_date: formattedExpiration,
         }),
       });
-  
+
       const result = await response.json();
-  
+
       if (response.ok) {
         Alert.alert('Success', 'Product added successfully!');
-        console.log('Added product:', result);
         setName('');
         setExpiration('');
         Keyboard.dismiss();
       } else {
-        Alert.alert('Error', result.message || 'Failed to add product.');
-        console.log('Error response:', result);
+        Alert.alert('Error', result.message || 'Failed to add product');
       }
     } catch (err) {
       console.error('Error adding product:', err);
-      Alert.alert('Error', 'An error occurred while adding the product.');
+      Alert.alert('Error', 'An error occurred while adding the product');
+    } finally {
+      setIsLoading(false);
     }
   };
+
   const takePicture = async () => {
-    if (cameraRef.current) {
-      const photo = await cameraRef.current.takePictureAsync();
-      if (photo) {
-        setPhotos((prevPhoto) => [...prevPhoto, photo.uri]);
-        setShowCamera(false);
+    if (cameraRef.current && authData) {
+      try {
+        setIsLoading(true);
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
+        if (photo) {
+          setPhotos(prev => [...prev, photo.uri]);
+          setShowCamera(false);
+          
+          Alert.alert('Processing', 'Analyzing receipt...');
+          const result = await uploadReceipt(photo.uri);
+          
+          if (result.success) {
+            Alert.alert('Success', 'Receipt processed successfully!');
+          } else {
+            Alert.alert('Error', result.message || 'Failed to process receipt');
+          }
+        }
+      } catch (error) {
+        console.error('Camera error:', error);
+        Alert.alert('Error', 'Failed to take picture');
+      } finally {
+        setIsLoading(false);
       }
+    }
+  };
+
+  const uploadReceipt = async (uri: string) => {
+    if (!authData) {
+      return { success: false, message: 'Please log in first' };
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('picture', {
+        uri,
+        type: 'image/jpeg',
+        name: 'receipt.jpg',
+      } as any);
+
+      const response = await fetch(`http://10.0.0.83:8080/api/gpt/upload/picture?userId=${authData.userId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authData.token}`,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+      
+      return {
+        success: response.ok,
+        data: result,
+        message: result.message
+      };
+    } catch (error) {
+      console.error('Upload error:', error);
+      return {
+        success: false,
+        message: 'Network error occurred'
+      };
     }
   };
 
@@ -109,7 +176,7 @@ export default function HomeScreen() {
 
   const isSubmitDisabled = !(
     name.trim().length > 0 && expiration.length === 5 && validateMonth(expiration)
-  );
+  ) || isLoading;
 
   const cancelInput = () => {
     setName('');
@@ -146,7 +213,12 @@ export default function HomeScreen() {
             <Button onPress={cancelInput} color="white" title="Cancel" />
           </View>
           <View style={styles.buttonWrapAdd}>
-            <Button disabled={isSubmitDisabled} onPress={addProduct} color="white" title="Add" />
+            <Button 
+              disabled={isSubmitDisabled} 
+              onPress={addProduct} 
+              color="white" 
+              title={isLoading ? "Adding..." : "Add"} 
+            />
           </View>
         </View>
       </View>
@@ -160,19 +232,33 @@ export default function HomeScreen() {
       {showCamera ? (
         <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
           <View style={styles.buttonContainer}>
-            <FontAwesome name="camera" size={35} onPress={takePicture} />
+            <FontAwesome 
+              name="camera" 
+              size={35} 
+              onPress={takePicture} 
+              color={isLoading ? 'grey' : 'white'}
+            />
             <FontAwesome name="close" size={35} onPress={closeCamera} />
           </View>
         </CameraView>
       ) : (
-        <TouchableOpacity onPress={openCamera} style={styles.photoButton}>
+        <TouchableOpacity 
+          onPress={openCamera} 
+          style={styles.photoButton}
+          disabled={isLoading}
+        >
           <FontAwesome name="camera" size={25} />
-          <Text style={{ marginLeft: 10 }}>Take Photo</Text>
+          <Text style={{ marginLeft: 10 }}>
+            {isLoading ? 'Processing...' : 'Take Photo'}
+          </Text>
         </TouchableOpacity>
       )}
     </View>
   );
 }
+
+// Styles remain unchanged
+// ... (keeping your existing styles)
 
 const styles = StyleSheet.create({
   photoButton: {
